@@ -17,6 +17,7 @@ import {
   getEducationalSignal 
 } from "./stockData.js";
 import { getDetailedRelationshipExplanation } from "./analytics.js";
+import { supabase } from "./supabase.js";
 import { 
   db, 
   auth, 
@@ -634,16 +635,37 @@ async function handleAddToWatchlist() {
       handleFirestoreError(err, OperationType.CREATE, "watchlists");
     }
   } else {
-    // Guest localStorage simulation
-    const localSaved = JSON.parse(localStorage.getItem("symmetry_watchlist") || "[]");
-    const offlineEntry = {
-      ...newEntry,
-      id: "local_" + Date.now()
+    // Save to Supabase Postgres 'entries' table
+    // Try inserting snake_case first; fallback to camelCase if that fails (maximizing column schema resiliency)
+    const insertData = {
+      anchor_stock: selectedAnchor,
+      comparison_stock: selectedComparison,
+      correlation_score: correlation,
+      signal: signal.status,
+      created_at: new Date().toISOString()
     };
-    localSaved.push(offlineEntry);
-    localStorage.setItem("symmetry_watchlist", JSON.stringify(localSaved));
-    watchlist = localSaved;
-    renderWatchlistTable();
+
+    try {
+      const { error: insertError } = await supabase.from('entries').insert([insertData]);
+      if (insertError && insertError.message.includes('Could not find')) {
+        // Retry with camelCase columns
+        const camelData = {
+          anchorStock: selectedAnchor,
+          comparisonStock: selectedComparison,
+          correlationScore: correlation,
+          signal: signal.status,
+          createdAt: Date.now()
+        };
+        const { error: retryError } = await supabase.from('entries').insert([camelData]);
+        if (retryError) {
+          console.error("Error inserting camelCase watchlistItem into Supabase:", retryError);
+        }
+      } else if (insertError) {
+        console.error("Error inserting snake_case watchlistItem into Supabase:", insertError);
+      }
+    } catch (err) {
+      console.error("Exception saving watchlistItem to Supabase:", err);
+    }
   }
 
   // Flash positive button feedback state
@@ -668,20 +690,63 @@ async function handleDeleteWatchlist(id) {
       handleFirestoreError(err, OperationType.DELETE, `watchlists/${id}`);
     }
   } else {
-    const localSaved = JSON.parse(localStorage.getItem("symmetry_watchlist") || "[]");
-    const updated = localSaved.filter(item => item.id !== id);
-    localStorage.setItem("symmetry_watchlist", JSON.stringify(updated));
-    watchlist = updated;
-    renderWatchlistTable();
+    try {
+      const targetId = isNaN(Number(id)) ? id : Number(id);
+      const { error } = await supabase.from('entries').delete().eq('id', targetId);
+      if (error) {
+        console.error("Error deleting from Supabase:", error);
+      }
+    } catch (err) {
+      console.error("Exception during Supabase delete:", err);
+    }
+  }
+}
+
+// Global active subscription/listeners references
+let unsubscribeWatchlist = null;
+let supabaseSubscription = null;
+
+// Async loader of watchlists from Supabase database
+async function loadWatchlistFromSupabase() {
+  try {
+    const { data, error } = await supabase
+      .from('entries')
+      .select('*');
+    
+    if (error) {
+      console.error("Error loading entries from Supabase:", error);
+      return;
+    }
+
+    if (data) {
+      watchlist = data.map(row => ({
+        id: row.id,
+        anchorStock: row.anchor_stock !== undefined ? row.anchor_stock : (row.anchorStock !== undefined ? row.anchorStock : ""),
+        comparisonStock: row.comparison_stock !== undefined ? row.comparison_stock : (row.comparisonStock !== undefined ? row.comparisonStock : ""),
+        correlationScore: row.correlation_score !== undefined ? parseFloat(row.correlation_score) : (row.correlationScore !== undefined ? parseFloat(row.correlationScore) : 0),
+        signal: row.signal !== undefined ? row.signal : (row.signalType !== undefined ? row.signalType : ""),
+        createdAt: row.created_at ? new Date(row.created_at).getTime() : (row.createdAt ? new Date(row.createdAt).getTime() : Date.now())
+      }));
+
+      // Sort by creation time descending in JS for robust consistency
+      watchlist.sort((a, b) => b.createdAt - a.createdAt);
+
+      renderWatchlistTable();
+    }
+  } catch (err) {
+    console.error("Exception loading watchlists from Supabase:", err);
   }
 }
 
 // Watchlist Sync listeners setup
-let unsubscribeWatchlist = null;
 function setupWatchlistListener() {
   if (unsubscribeWatchlist) {
     unsubscribeWatchlist();
     unsubscribeWatchlist = null;
+  }
+  if (supabaseSubscription) {
+    supabase.removeChannel(supabaseSubscription);
+    supabaseSubscription = null;
   }
 
   if (user && isFirebaseConfigured) {
@@ -708,12 +773,26 @@ function setupWatchlistListener() {
       console.error("Watchlist network stream failed, resetting to sandbox fallback:", err);
     });
   } else {
-    // Guest fallback modes
-    elements.dbSyncBadge.innerText = "Local Sandbox Mode";
-    elements.dbSyncBadge.className = "text-[9px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded theme-surface border theme-border select-none";
-    elements.footerSyncBadge.innerText = "Sandbox Active";
-    watchlist = JSON.parse(localStorage.getItem("symmetry_watchlist") || "[]");
-    renderWatchlistTable();
+    // Supabase Sandbox Mode (fully real-time synced!)
+    elements.dbSyncBadge.innerText = "Supabase Live";
+    elements.dbSyncBadge.className = "text-[9px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-sky-500/10 text-sky-500 border border-sky-500/20 select-none";
+    elements.footerSyncBadge.innerText = "Supabase Sync Active";
+    
+    // Perform initial load
+    loadWatchlistFromSupabase();
+
+    // Subscribe to realtime database changes for global shared updates
+    supabaseSubscription = supabase
+      .channel('entries-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'entries' },
+        (payload) => {
+          console.log("Supabase realtime notification:", payload);
+          loadWatchlistFromSupabase();
+        }
+      )
+      .subscribe();
   }
 }
 
