@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny Catch All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Primitive Identity & ID Security Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // 3. Entity-Specific Blueprint Validation Helper (Anti-Value-Poisoning & Strict Schema Checks)
+    function isValidWatchlistItem(data, authId) {
+      return data.keys().hasAll(['userId', 'anchorStock', 'comparisonStock', 'correlationScore', 'signal', 'createdAt'])
+        && data.keys().size() == 6
+        && data.userId == authId
+        && data.anchorStock is string && data.anchorStock.size() <= 10
+        && data.comparisonStock is string && data.comparisonStock.size() <= 10
+        && (data.correlationScore is number || data.correlationScore is float)
+        && data.correlationScore >= -1.0 && data.correlationScore <= 1.0
+        && data.signal is string && data.signal.size() <= 60
+        && data.createdAt is int;
+    }
+
+    // 4. Secured Path Target
+    match /watchlists/{watchlistId} {
+      // Direct get and secure query list mapping
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      // Strict creation verification
+      allow create: if isSignedIn()
+        && isValidId(watchlistId)
+        && isValidWatchlistItem(request.resource.data, request.auth.uid);
+
+      // Deletes are only allowed by the owner
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Watchlist historical entries are immutable
+      allow update: if false;
+    }
+  }
+}

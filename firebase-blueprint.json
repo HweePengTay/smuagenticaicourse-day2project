@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "WatchlistItem": {
+      "title": "WatchlistItem",
+      "description": "A saved stock comparison pair on the investor's research watchlist.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The Firebase Authentication UID of the owner."
+        },
+        "anchorStock": {
+          "type": "string",
+          "description": "Ticker symbol of the AI anchor stock."
+        },
+        "comparisonStock": {
+          "type": "string",
+          "description": "Ticker symbol of the compared sector stock."
+        },
+        "correlationScore": {
+          "type": "number",
+          "description": "Calculated global correlation coefficient between the two stocks."
+        },
+        "signal": {
+          "type": "string",
+          "description": "A simple educational signal."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp indicating when the item was watched (millisecond epoch)."
+        }
+      },
+      "required": [
+        "userId",
+        "anchorStock",
+        "comparisonStock",
+        "correlationScore",
+        "signal",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/watchlists/{watchlistId}": {
+      "schema": "WatchlistItem",
+      "description": "A flat root collection representing comparative watchlists across all users."
+    }
+  }
+}

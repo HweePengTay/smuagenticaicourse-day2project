@@ -1,0 +1,6 @@
+{
+  "name": "Symmetry Investor Dashboard",
+  "description": "Compare price patterns of anchor AI stocks against other sector stocks, calculate correlation, explore trends, and manage a custom educator watchlist.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
