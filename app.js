@@ -8,6 +8,24 @@
  * 4. Advanced mathematical asset correlation mapping visualizations.
  */
 
+// Immediate unhandled script error interceptor for sandboxed and cross-origin widgets
+window.addEventListener('error', (e) => {
+  const msg = (e.message || "").toLowerCase();
+  const file = (e.filename || "").toLowerCase();
+  if (msg.includes('script error') || file.includes('disqus') || msg.includes('disqus')) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+}, true);
+
+window.addEventListener('unhandledrejection', (e) => {
+  const reasonMsg = (e.reason && e.reason.message || "").toLowerCase();
+  if (reasonMsg.includes('disqus')) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+}, true);
+
 import { Chart, registerables } from "chart.js";
 import { 
   ANCHOR_STOCKS, 
@@ -86,7 +104,8 @@ const elements = {
   explainerRelationBadge: document.getElementById("explainer-relation-type-badge"),
   explainerWhyRelated: document.getElementById("explainer-why-related"),
   explainerCorrelationMeaning: document.getElementById("explainer-correlation-meaning"),
-  explainerRisksList: document.getElementById("explainer-risks-list")
+  explainerRisksList: document.getElementById("explainer-risks-list"),
+  disqusCommentCountAnchor: document.getElementById("disqus-comment-count-anchor")
 };
 
 // --- 3. Dynamic Visual Theme Engine ---
@@ -584,6 +603,94 @@ function updateDashboardData() {
 
   // Reflect row selected-state styles inside Watchlist table
   renderWatchlistTable();
+
+  // Sync Disqus Discussion thread for the active coordinate parameters
+  syncDisqusComments();
+}
+
+/**
+ * Sync Disqus thread dynamically based on the current active stock pair and timeline
+ */
+function syncDisqusComments() {
+  const shortname = 'investment-dashboard';
+  const language = 'en_SG';
+  const identifier = `symmetry-${selectedAnchor}-${selectedComparison}-${timelineStart}`;
+  const title = `Symmetry Index: ${selectedAnchor} vs ${selectedComparison} (${timelineStart})`;
+  // Construct dynamic canonical URL with custom hashtag routing to enable thread isolation
+  const pageUrl = `${window.location.origin}/#pair-${selectedAnchor}-${selectedComparison}-${timelineStart}`;
+
+  // Synchronize Comment Count parameters for the active configuration
+  if (elements.disqusCommentCountAnchor) {
+    elements.disqusCommentCountAnchor.setAttribute('data-disqus-identifier', identifier);
+    elements.disqusCommentCountAnchor.setAttribute('data-disqus-url', pageUrl);
+  }
+
+  // Load count.js or refresh the widget counts via standard Disqus reset
+  if (typeof window.DISQUSWIDGETS === 'undefined') {
+    const d = document;
+    const s = d.createElement('script');
+    s.id = 'dsq-count-scr';
+    s.src = `https://${shortname}.disqus.com/count.js`;
+    s.setAttribute('data-timestamp', String(+new Date()));
+    (d.head || d.body).appendChild(s);
+  } else {
+    try {
+      window.DISQUSWIDGETS.getCount({ reset: true });
+    } catch (err) {
+      console.warn("Disqus count reset exception gracefully handled:", err);
+    }
+  }
+
+  if (typeof window.DISQUS === 'undefined') {
+    // Initial configuration and embed loading
+    window.disqus_config = function () {
+      this.page.url = pageUrl;
+      this.page.identifier = identifier;
+      this.page.title = title;
+      this.language = language;
+      this.page.remoteAuthS3 = '';
+      this.page.apiKey = '';
+      this.sso = {
+        name: 'SampleNews',
+        button: 'http://example.com/images/samplenews.gif',
+        icon: 'http://example.com/favicon.png',
+        url: 'http://example.com/login/',
+        logout: 'http://example.com/logout/',
+        profile_url: 'http://example.com/profileUrlTemplate/{username}',
+        width: '800',
+        height: '400'
+      };
+    };
+
+    const d = document;
+    const s = d.createElement('script');
+    s.src = `https://${shortname}.disqus.com/embed.js`;
+    s.setAttribute('data-timestamp', String(+new Date()));
+    (d.head || d.body).appendChild(s);
+  } else {
+    // Disqus is already loaded, reset and load comments specific to the current stock pairing
+    window.DISQUS.reset({
+      reload: true,
+      config: function () {
+        this.page.url = pageUrl;
+        this.page.identifier = identifier;
+        this.page.title = title;
+        this.language = language;
+        this.page.remoteAuthS3 = '';
+        this.page.apiKey = '';
+        this.sso = {
+          name: 'SampleNews',
+          button: 'http://example.com/images/samplenews.gif',
+          icon: 'http://example.com/favicon.png',
+          url: 'http://example.com/login/',
+          logout: 'http://example.com/logout/',
+          profile_url: 'http://example.com/profileUrlTemplate/{username}',
+          width: '800',
+          height: '400'
+        };
+      }
+    });
+  }
 }
 
 // --- 7. Watchlist Persistence Actions ---

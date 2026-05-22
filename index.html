@@ -4,8 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Symmetry Investor Dashboard</title>
+    <!-- Universal cross-origin thread error neutralizer for sandbox environment security -->
+    <script>
+      window.addEventListener('error', function(e) {
+        const isDisqus = e.filename && (e.filename.includes('disqus') || e.filename.includes('disquscdn'));
+        const isGenericScriptError = e.message && e.message.toLowerCase().includes('script error');
+        if (isDisqus || isGenericScriptError) {
+          console.warn('Symmetry Sandbox: Gracefully suppressed third-party resource runtime exception:', e.message);
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+      }, true);
+      
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e.reason && e.reason.message && e.reason.message.toLowerCase().includes('disqus')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
     <!-- CSS is loaded directly from style.css. Vite compiles Tailwind classes seamlessly -->
     <link rel="stylesheet" href="/style.css" />
+    <!-- Microsoft Clarity Tracking Code -->
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "wuzsgrvpl5");
+    </script>
   </head>
   <body class="min-h-screen font-sans selection:bg-slate-800 flex flex-col antialiased transition-colors duration-300">
     
@@ -403,6 +431,34 @@
               </div>
             </div>
 
+          </section>
+
+          <!-- Disqus Discussion Board Module -->
+          <section class="theme-card border theme-border rounded-xl p-5 shadow-sm transition-all duration-300">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b theme-border pb-4 mb-4">
+              <div>
+                <h3 class="text-xs font-black theme-text-main uppercase tracking-widest flex items-center gap-2 select-none">
+                  <svg class="w-4 h-4 text-sky-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A9 9 0 0 1 12 3v0a9 9 0 0 1 9 9v.75m-.75-3.03A12.016 12.016 0 0 0 12 11.25c-2.243 0-4.32-.615-6.096-1.688M12 11.25a9 9 0 1 1-9 9l1.41-1.41A11.956 11.956 0 0 0 12 21a11.956 11.956 0 0 0 7.59-2.791l1.41 1.41a9 9 0 0 1-9-9Z" />
+                  </svg>
+                  社群討論區 / Correlation Disquisition
+                </h3>
+                <p class="text-xs theme-text-muted mt-1">
+                  Share analytical insights, trade triggers, and qualitative commentary on current computing asset alignment targets.
+                </p>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <a id="disqus-comment-count-anchor" href="#disqus_thread" class="disqus-comment-count text-[9px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 select-none transition-colors">
+                  Comments
+                </a>
+                <div class="text-[9px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-sky-500/10 text-sky-500 border border-sky-500/20 select-none">
+                  English (Singapore)
+                </div>
+              </div>
+            </div>
+
+            <!-- Dynamic Disqus Thread Mount Point -->
+            <div id="disqus_thread" class="min-h-[300px] theme-surface rounded-lg p-2 transition-all duration-300"></div>
           </section>
 
         </section>
